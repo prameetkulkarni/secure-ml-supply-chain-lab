@@ -1,0 +1,46 @@
+# Admission control: a pod in the "demo" namespace is admitted only if every
+# image in it was signed by THIS repository's release workflow on main, and
+# carries a signed CycloneDX SBOM.
+#
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
+metadata:
+  name: require-signed-images
+spec:
+  validationActions: [Deny]
+  failurePolicy: Fail
+  webhookConfiguration:
+    timeoutSeconds: 15
+  matchConstraints:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: demo
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  matchImageReferences:
+    - glob: "*"          # every image, so an unsigned image from anywhere is rejected
+  attestors:
+    - name: releaseWorkflow
+      cosign:
+        keyless:
+          identities:
+            # The identity is the workflow file on the main branch. A signature
+            # made from a fork, another branch or another workflow does not match.
+            - subject: "https://github.com/prameetkulkarni/secure-ml-supply-chain-lab/.github/workflows/release.yml@refs/heads/main"
+              issuer: "https://token.actions.githubusercontent.com"
+        ctlog:
+          url: "https://rekor.sigstore.dev"
+  attestations:
+    - name: sbom
+      intoto:
+        type: https://cyclonedx.org/bom
+  validations:
+    - expression: >-
+        images.containers.map(image, verifyImageSignatures(image, [attestors.releaseWorkflow])).all(e, e > 0)
+      message: "Image is not signed by the release workflow on main."
+    - expression: >-
+        images.containers.map(image, verifyAttestationSignatures(image, attestations.sbom, [attestors.releaseWorkflow])).all(e, e > 0)
+      message: "Image has no signed CycloneDX SBOM from the release workflow."

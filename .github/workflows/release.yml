@@ -1,0 +1,82 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+
+# Start from zero permissions and grant only what the job needs.
+permissions: {}
+
+jobs:
+  build-sign:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write      # push the image to GHCR
+      id-token: write      # short-lived OIDC token for keyless signing; no stored keys
+      attestations: write  # build provenance
+    steps:
+      # Every action is pinned to a full commit hash, not a tag. Tags can be
+      # moved to malicious code (tj-actions in 2025, trivy-action in 2026).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Image name (GHCR needs lowercase)
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+
+      # Gate: if the scan fails, the job stops here and the image is never
+      # signed. An unsigned image cannot be deployed, so a failed scan blocks
+      # the release without any extra logic.
+      - name: Scan image, fail on high or critical CVEs
+        uses: anchore/scan-action@8576240a41341d866dbd7ebc72cd9fc0ef023f54 # v7.4.2
+        with:
+          image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          fail-build: true
+          severity-cutoff: high
+
+      - name: Generate SBOM (CycloneDX)
+        uses: anchore/sbom-action@fffec3d851af758d56fee099cf3fbf8aa8779843 # v0.24.3
+        with:
+          image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+
+      # Sign the digest, never the tag: a tag can be repointed, a digest cannot.
+      - name: Sign image (keyless)
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+
+      - name: Attach SBOM as a signed attestation
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign attest --yes --type cyclonedx --predicate sbom.cdx.json "${IMAGE}@${DIGEST}"
+
+      - name: Build provenance (SLSA)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Print the digest to deploy
+        run: echo "${IMAGE}@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"

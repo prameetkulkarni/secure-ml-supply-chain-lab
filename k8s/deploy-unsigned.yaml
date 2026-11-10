@@ -1,0 +1,11 @@
+# Negative test. This image is real and harmless, but nobody signed it with
+# your workflow identity, so the cluster must refuse it.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: unsigned
+  namespace: demo
+spec:
+  containers:
+    - name: nginx
+      image: nginx:1.27

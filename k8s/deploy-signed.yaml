@@ -1,0 +1,28 @@
+# Replace the image with the digest printed in the workflow run summary.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference
+  namespace: demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: inference }
+  template:
+    metadata:
+      labels: { app: inference }
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: inference
+          image: ghcr.io/prameetkulkarni/secure-ml-supply-chain-lab@sha256:REPLACE_WITH_DIGEST
+          ports:
+            - containerPort: 8080
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 128Mi }
