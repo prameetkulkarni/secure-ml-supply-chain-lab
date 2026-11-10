@@ -50,6 +50,9 @@ jobs:
           image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
           fail-build: true
           severity-cutoff: high
+          # Fail only on findings that have a fix. Debian marks many base-OS CVEs
+          # "won't fix"; blocking on those would block every release forever.
+          only-fixed: true
           output-format: table   # print findings in the job log
 
       - name: Generate SBOM (CycloneDX)
