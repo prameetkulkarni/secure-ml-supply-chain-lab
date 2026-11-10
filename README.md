@@ -40,7 +40,7 @@ commit to a running pod.
    helm install kyverno kyverno/kyverno -n kyverno --create-namespace
    ```
 
-6. Put the digest into `k8s/deploy-signed.yaml`, then:
+6. Apply the manifests (`k8s/deploy-signed.yaml` already points at the signed digest):
 
    ```sh
    kubectl apply -f k8s/namespace.yaml

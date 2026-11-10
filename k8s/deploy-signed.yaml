@@ -1,4 +1,3 @@
-# Replace the image with the digest printed in the workflow run summary.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,7 +14,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: inference
-          image: ghcr.io/prameetkulkarni/secure-ml-supply-chain-lab@sha256:REPLACE_WITH_DIGEST
+          image: ghcr.io/prameetkulkarni/secure-ml-supply-chain-lab@sha256:1f7f0ba947928ce8eeea1c7dfd1347b727cfcb7d3e9b351725ce84b9aa42130e
           ports:
             - containerPort: 8080
           securityContext:
