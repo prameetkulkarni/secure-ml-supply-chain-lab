@@ -50,6 +50,7 @@ jobs:
           image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
           fail-build: true
           severity-cutoff: high
+          output-format: table   # print findings in the job log
 
       - name: Generate SBOM (CycloneDX)
         uses: anchore/sbom-action@fffec3d851af758d56fee099cf3fbf8aa8779843 # v0.24.3
